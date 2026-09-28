@@ -1,0 +1,13 @@
+{
+  "name": "go-mail-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "End-to-end security tests for go-mail (Playwright)",
+  "scripts": {
+    "test": "playwright test",
+    "setup": "npm install && playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

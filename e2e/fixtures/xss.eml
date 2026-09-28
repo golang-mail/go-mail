@@ -1,0 +1,10 @@
+From: Attacker <attacker@evil.test>
+To: Victim <victim@test.local>
+Subject: XSS test message
+Date: Thu, 01 Jan 2026 00:00:00 +0000
+Content-Type: text/plain; charset=utf-8
+
+Harmless first line.
+<img src=x onerror="window.__xssFired=true">
+<script>window.__xssFired=true</script>
+XSS-CANARY-9f3a end.

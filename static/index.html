@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Go Mail</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <script nonce="__CSP_NONCE__">
+        (function() {
+            var theme = localStorage.getItem('go-mail-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+            var s = parseFloat(localStorage.getItem('go-mail-ui-scale'));
+            if (s && s > 0) document.documentElement.style.setProperty('--ui-scale', s);
+        })();
+    </script>
+    <script nonce="__CSP_NONCE__" src="/static/purify.min.js"></script>
+    <link rel="stylesheet" href="/static/styles.css?v=58">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="loading-overlay" style="display:none; position:fixed; inset:0; z-index:10000; background:var(--bg-primary, #1a1a2e); align-items:center; justify-content:center; flex-direction:column; gap:16px;">
+        <div style="font-size:24px; font-weight:500; color:var(--text-primary, #e0e0e0);">Go Mail</div>
+        <div id="loading-status" style="font-size:14px; color:var(--text-secondary, #aaa);">Loading...</div>
+        <div style="width:200px; height:4px; background:var(--border-color, #333); border-radius:2px; overflow:hidden;">
+            <div id="loading-bar" style="width:10%; height:100%; background:var(--accent-color, #4285f4); border-radius:2px; transition:width 0.5s ease;"></div>
+        </div>
+    </div>
+    <div class="app-container">
+        <div class="drawer-backdrop" id="drawer-backdrop"></div>
+        <aside class="sidebar" id="sidebar">
+            <div class="compose-btn-container">
+                <button class="compose-btn" data-action="open-compose" title="Compose">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/>
+                    </svg>
+                    <span class="compose-btn-label">Compose</span>
+                </button>
+                <button class="btn-icon sidebar-count-toggle" id="mailbox-count-toggle" title="Show email counts" aria-label="Show email counts">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                </button>
+            </div>
+            <div id="account-tab-content" class="account-tab-content-container"></div>
+            <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Collapse sidebar" aria-label="Collapse sidebar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+            </button>
+        </aside>
+        <div class="sidebar-resizer" id="sidebar-resizer"></div>
+        <main class="main-content">
+            <header class="toolbar">
+                <button class="btn-icon mobile-menu-btn" id="mobile-menu-btn" title="Open menu" aria-label="Open menu">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+                </button>
+                <div class="search-bar">
+                    <span class="search-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                    </span>
+                    <input type="text" id="search-input" placeholder="Search mail" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">
+                    <div class="autocomplete-dropdown" id="ac-search"></div>
+                </div>
+                <button id="search-scope" class="search-scope-btn" title="Toggle search scope: All mailboxes">All</button>
+                <div class="toolbar-actions">
+                    <span id="filters-running-indicator" class="filters-running-indicator" style="display:none;" title="Filters are running">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>
+                    </span>
+                    <div class="settings-dropdown">
+                        <button class="btn-icon" id="settings-btn" title="Settings" aria-label="Settings">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+                        </button>
+                        <div class="settings-menu" id="settings-menu">
+                            <button class="settings-menu-item" data-action="open-filters" data-close-menu>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
+                                Filters
+                            </button>
+                            <button class="settings-menu-item" data-action="open-labels" data-close-menu>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z"/></svg>
+                                Labels
+                            </button>
+                            <button class="settings-menu-item" data-action="open-plugins" data-close-menu>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z"/></svg>
+                                Plugins
+                            </button>
+                            <button class="settings-menu-item" id="notif-toggle-btn" title="Enable browser notifications">
+                                <svg id="notif-icon-off" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/></svg>
+                                <svg id="notif-icon-on" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+                                <svg id="notif-icon-denied" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M20 18.69L7.84 6.14 5.27 3.49 4 4.76l2.8 2.8v.01c-.52.99-.8 2.16-.8 3.43v5l-2 2v1h13.73l2 2L21 19.72l-1-1.03zM12 22c1.11 0 2-.89 2-2h-4c0 1.11.89 2 2 2zm6-7.32V11c0-3.08-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68c-.15.03-.29.08-.42.12-.1.03-.2.07-.3.11h-.01c-.01 0-.01 0-.02.01-.23.09-.46.2-.68.31 0 0-.01 0-.01.01L18 14.68z"/></svg>
+                                <span id="notif-label">Notifications</span>
+                            </button>
+                            <button class="settings-menu-item" id="sound-toggle-btn" title="Toggle new-mail sound">
+                                <svg id="sound-icon-on" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                                <svg id="sound-icon-off" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+                                <span id="sound-label">Sound</span>
+                            </button>
+                            <div class="settings-menu-item settings-menu-row" title="Text size">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 4v3h5v12h3V7h5V4H9zm-6 8h3v7h3v-7h3V9H3v3z"/></svg>
+                                <span>Text size</span>
+                                <div class="zoom-stepper">
+                                    <button type="button" class="zoom-step-btn" id="zoom-dec" aria-label="Decrease text size">&minus;</button>
+                                    <span class="zoom-value" id="zoom-value">100%</span>
+                                    <button type="button" class="zoom-step-btn" id="zoom-inc" aria-label="Increase text size">+</button>
+                                </div>
+                            </div>
+                            <button class="settings-menu-item" id="theme-toggle-btn" title="Toggle dark/light mode">
+                                <svg id="theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
+                                <svg id="theme-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
+                                <span id="theme-label">Dark mode</span>
+                            </button>
+                            <button class="settings-menu-item" id="logout-btn" title="Log out">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+                                <span>Log out</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="account-tabs" class="account-tabs"></div>
+            </header>
+
+            <!-- Hidden tab buttons for programmatic switching -->
+            <div style="display:none;">
+                <button class="mail-tablinks" data-action="show-mails" id="defaultMailOpen">Mails</button>
+                <button class="mail-tablinks" data-action="open-tab" data-tab="compose-content" data-content-class="mail-tabcontent" data-links-class="mail-tablinks">Compose</button>
+                <button class="mail-tablinks" data-action="open-tab" data-tab="mail-content" data-content-class="mail-tabcontent" data-links-class="mail-tablinks">Email</button>
+                <button class="mail-tablinks" data-action="open-tab" data-tab="search-content" data-content-class="mail-tabcontent" data-links-class="mail-tablinks">Search</button>
+                <button class="mail-tablinks" data-action="open-filters">Filters</button>
+                <button class="mail-tablinks" data-action="open-tab" data-tab="new-filter-content" data-content-class="mail-tabcontent" data-links-class="mail-tablinks">New Filter</button>
+                <button class="mail-tablinks" data-action="open-labels">Labels</button>
+                <button class="mail-tablinks" data-action="open-tab" data-tab="new-label-content" data-content-class="mail-tabcontent" data-links-class="mail-tablinks">New Label</button>
+                <button class="mail-tablinks" data-action="open-plugins">Plugins</button>
+                <button class="mail-tablinks" data-action="open-tab" data-tab="plugin-editor-content" data-content-class="mail-tabcontent" data-links-class="mail-tablinks">Plugin Editor</button>
+            </div>
+
+            <div class="content-area">
+                <div id="mails-container" class="tabcontent mail-tabcontent">
+                    <div id="refresh-indicator" class="refresh-indicator" style="display:none;">Refreshing...</div>
+                </div>
+                <div id="mail-content" class="tabcontent mail-tabcontent">
+                    <div class="email-view-container">
+                        <div class="email-view-card">
+                            <div class="email-actions-bar">
+                                <button class="btn-icon" data-action="show-mails" title="Back to inbox" aria-label="Back to inbox">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                                </button>
+                                <button id="reply-button" class="btn-icon" title="Reply" aria-label="Reply">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+                                </button>
+                                <button id="reply-all-button" class="btn-icon" title="Reply all" aria-label="Reply all">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M7 8V5l-7 7 7 7v-3l-4-4 4-4zm6 1V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg>
+                                </button>
+                                <button id="delete-button" class="btn-icon" title="Delete" aria-label="Delete">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                </button>
+                                <button id="move-to-button" class="btn-icon" title="Move to" aria-label="Move to">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
+                                </button>
+                                <button id="mark-unread-button" class="btn-icon" title="Mark as unread" aria-label="Mark as unread">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                                </button>
+                                <button id="show-headers-button" class="btn-icon" title="Show headers" aria-label="Show headers">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+                                </button>
+                                <button id="add-label-button" class="btn-icon" title="Add label" aria-label="Add label">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z"/></svg>
+                                </button>
+                                <button id="spam-button" class="btn-icon" title="Report spam" aria-label="Report spam">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+                                </button>
+                                <button id="not-spam-button" class="btn-icon" title="Not spam" aria-label="Not spam" style="display:none;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#188038"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                                </button>
+                                <span id="spam-score-badge" class="spam-score-badge" style="display:none;" title="Bayesian spam score"></span>
+                            </div>
+                            <div id="mail-header"></div>
+                            <div id="mail-body"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="search-content" class="tabcontent mail-tabcontent">
+                    <div id="search-results"></div>
+                </div>
+                <div id="filters-content" class="tabcontent mail-tabcontent filters-page">
+                    <div class="filters-toolbar">
+                        <div class="filters-title">
+                            <h3>Filters</h3>
+                            <span id="filters-count" class="filters-count"></span>
+                        </div>
+                        <div class="filters-toolbar-actions">
+                            <input id="filter-search" type="search" placeholder="Search filters..." class="filters-search">
+                            <button id="refresh-filters" class="btn-icon" title="Refresh" aria-label="Refresh">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                            </button>
+                            <button id="run-all-filters" class="btn btn-default" title="Run all filters on all emails in all mailboxes">Run All Filters</button>
+                            <button id="new-filter-btn" class="btn btn-primary">New Filter</button>
+                        </div>
+                    </div>
+                    <div id="filters-list" class="filter-list">Loading filters...</div>
+                </div>
+                <div id="labels-content" class="tabcontent mail-tabcontent filters-page">
+                    <div class="filters-toolbar">
+                        <div class="filters-title">
+                            <h3>Labels</h3>
+                            <span id="labels-count" class="filters-count"></span>
+                        </div>
+                        <div class="filters-toolbar-actions">
+                            <input id="label-search" type="search" placeholder="Search labels..." class="filters-search">
+                            <button id="new-label-btn" class="btn btn-primary">New Label</button>
+                        </div>
+                    </div>
+                    <div id="labels-list" class="filter-list">Loading labels...</div>
+                </div>
+
+                <div id="compose-content" class="tabcontent mail-tabcontent">
+                    <div class="compose-card">
+                        <div class="compose-header">New Message</div>
+                        <div class="compose-fields">
+                            <div class="compose-field-row">
+                                <label class="compose-field-label" for="compose-from">From</label>
+                                <select id="compose-from" class="compose-field-input"></select>
+                            </div>
+                            <div class="compose-field-row">
+                                <label class="compose-field-label" for="compose-to">To</label>
+                                <div class="autocomplete-wrapper" style="flex:1;">
+                                    <input type="text" id="compose-to" class="compose-field-input" placeholder="Recipients" autocomplete="off">
+                                    <div class="autocomplete-dropdown" id="ac-compose-to"></div>
+                                </div>
+                            </div>
+                            <div class="compose-field-row">
+                                <label class="compose-field-label" for="compose-cc">Cc</label>
+                                <div class="autocomplete-wrapper" style="flex:1;">
+                                    <input type="text" id="compose-cc" class="compose-field-input" placeholder="" autocomplete="off">
+                                    <div class="autocomplete-dropdown" id="ac-compose-cc"></div>
+                                </div>
+                            </div>
+                            <div class="compose-field-row">
+                                <label class="compose-field-label" for="compose-bcc">Bcc</label>
+                                <div class="autocomplete-wrapper" style="flex:1;">
+                                    <input type="text" id="compose-bcc" class="compose-field-input" placeholder="" autocomplete="off">
+                                    <div class="autocomplete-dropdown" id="ac-compose-bcc"></div>
+                                </div>
+                            </div>
+                            <div class="compose-field-row">
+                                <label class="compose-field-label" for="compose-subject">Subject</label>
+                                <input type="text" id="compose-subject" class="compose-field-input" placeholder="">
+                            </div>
+                        </div>
+                        <div class="compose-editor-toolbar" id="compose-toolbar">
+                            <div class="compose-toolbar-group">
+                                <button type="button" class="compose-toolbar-btn" data-cmd="bold" title="Bold" aria-label="Bold"><b>B</b></button>
+                                <button type="button" class="compose-toolbar-btn" data-cmd="italic" title="Italic" aria-label="Italic"><i>I</i></button>
+                                <button type="button" class="compose-toolbar-btn" data-cmd="underline" title="Underline" aria-label="Underline"><u>U</u></button>
+                                <button type="button" class="compose-toolbar-btn" data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><s>S</s></button>
+                            </div>
+                            <div class="compose-toolbar-sep"></div>
+                            <div class="compose-toolbar-group">
+                                <select class="compose-toolbar-select" data-cmd="fontSize" title="Font size" aria-label="Font size">
+                                    <option value="">Size</option>
+                                    <option value="1">Small</option>
+                                    <option value="3">Normal</option>
+                                    <option value="5">Large</option>
+                                    <option value="7">Huge</option>
+                                </select>
+                            </div>
+                            <div class="compose-toolbar-sep"></div>
+                            <div class="compose-toolbar-group">
+                                <label class="compose-toolbar-btn color-picker-label" title="Text color">
+                                    <b id="fore-color-preview" style="pointer-events:none;">A</b>
+                                    <input type="color" id="compose-fore-color" value="#d93025" class="color-picker-input">
+                                    <span class="color-picker-underline" id="fore-color-underline" style="background:#d93025;"></span>
+                                </label>
+                                <label class="compose-toolbar-btn color-picker-label" title="Highlight color">
+                                    <span id="bg-color-preview" style="pointer-events:none; font-weight:bold; background:#ffff00; padding:0 2px; line-height:1;">A</span>
+                                    <input type="color" id="compose-bg-color" value="#ffff00" class="color-picker-input">
+                                    <span class="color-picker-underline" id="bg-color-underline" style="background:#ffff00;"></span>
+                                </label>
+                                <button type="button" class="compose-toolbar-btn" data-cmd="removeFormat" title="Remove formatting" aria-label="Remove formatting">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3.27 5L2 6.27l6.97 6.97L6.5 19h3l1.57-3.66L16.73 21 18 19.73 3.27 5zM6 5v.18L8.82 8h2.4l-.72 1.68 2.1 2.1L14.21 8H20V5H6z"/></svg>
+                                </button>
+                            </div>
+                            <div class="compose-toolbar-sep"></div>
+                            <div class="compose-toolbar-group">
+                                <button type="button" class="compose-toolbar-btn" data-cmd="insertUnorderedList" title="Bullet list" aria-label="Bullet list">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/></svg>
+                                </button>
+                                <button type="button" class="compose-toolbar-btn" data-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"/></svg>
+                                </button>
+                            </div>
+                            <div class="compose-toolbar-sep"></div>
+                            <div class="compose-toolbar-group">
+                                <button type="button" class="compose-toolbar-btn" data-cmd="justifyLeft" title="Align left" aria-label="Align left">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15 15H3v2h12v-2zm0-8H3v2h12V7zM3 13h18v-2H3v2zm0 8h18v-2H3v2zM3 3v2h18V3H3z"/></svg>
+                                </button>
+                                <button type="button" class="compose-toolbar-btn" data-cmd="justifyCenter" title="Align center" aria-label="Align center">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z"/></svg>
+                                </button>
+                            </div>
+                            <div class="compose-toolbar-sep"></div>
+                            <div class="compose-toolbar-group">
+                                <button type="button" class="compose-toolbar-btn" id="compose-link-btn" title="Insert link" aria-label="Insert link">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                                </button>
+                            </div>
+                            <div style="margin-left:auto;">
+                                <button type="button" class="compose-toolbar-btn compose-mode-toggle" id="compose-mode-toggle" title="Switch to plain text">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                                    <span id="compose-mode-label">Plain text</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="compose-body-html" class="compose-body-editor" contenteditable="true"></div>
+                        <textarea id="compose-body" class="compose-body-text" style="display:none;"></textarea>
+                        <div id="compose-attachments" class="compose-attachments"></div>
+                        <div class="compose-actions">
+                            <button id="compose-send" class="btn btn-primary">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                                Send
+                            </button>
+                            <input type="file" id="compose-file-input" multiple style="display:none;">
+                            <button type="button" class="btn-icon" id="compose-attach-btn" title="Attach files" aria-label="Attach files">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
+                            </button>
+                            <button class="btn btn-default" data-action="discard-compose">Discard</button>
+                            <button class="btn btn-default btn-draft" id="compose-draft-btn" title="Save as draft">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:4px"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+                                Draft
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="new-filter-content" class="tabcontent mail-tabcontent filters-page">
+                    <div class="filters-toolbar">
+                        <div class="filters-title">
+                            <button id="back-to-filters" class="btn-icon" title="Back to filters" aria-label="Back to filters">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                            </button>
+                            <h3 id="new-filter-title">New Filter</h3>
+                        </div>
+                    </div>
+                    <div class="filter-editor-form">
+                        <div class="filter-section">
+                            <div class="filter-section-header">Filter Name</div>
+                            <input type="text" id="filter-name" placeholder="Give this filter a name...">
+                        </div>
+
+                        <div class="filter-section">
+                            <div class="filter-section-header">Scope</div>
+                            <div class="filter-section-hint">Leave empty to match every account, or only INBOX.</div>
+                            <div class="filter-scope-grid">
+                                <div class="filter-scope-col">
+                                    <label>Accounts</label>
+                                    <div class="filter-add-row">
+                                        <select id="filter-account-input"></select>
+                                        <button id="add-account-btn" class="btn btn-default">Add</button>
+                                    </div>
+                                    <div id="filter-accounts-list" class="filter-tags"></div>
+                                </div>
+                                <div class="filter-scope-col">
+                                    <label>Mailboxes</label>
+                                    <div class="filter-add-row">
+                                        <select id="filter-mailbox-input"></select>
+                                        <button id="add-mailbox-btn" class="btn btn-default">Add</button>
+                                    </div>
+                                    <div id="filter-mailboxes-list" class="filter-tags"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="filter-section">
+                            <div class="filter-section-header">Schedule</div>
+                            <div class="filter-section-hint">Leave the dates empty to keep the filter active until you change it.</div>
+                            <label class="filter-check-row"><input type="checkbox" id="filter-disabled"> Disabled</label>
+                            <div class="filter-scope-grid">
+                                <div class="filter-scope-col">
+                                    <label for="filter-active-from">Active from</label>
+                                    <div class="filter-add-row">
+                                        <input type="datetime-local" id="filter-active-from">
+                                        <button class="btn btn-default" data-action="clear-filter-input" data-target="filter-active-from">Clear</button>
+                                    </div>
+                                </div>
+                                <div class="filter-scope-col">
+                                    <label for="filter-active-until">Active until</label>
+                                    <div class="filter-add-row">
+                                        <input type="datetime-local" id="filter-active-until">
+                                        <button class="btn btn-default" data-action="clear-filter-input" data-target="filter-active-until">Clear</button>
+                                    </div>
+                                    <div id="filter-on-expire-row" hidden>
+                                        <div class="filter-conditions-type-row">
+                                            <label for="filter-on-expire">When it ends</label>
+                                            <select id="filter-on-expire">
+                                                <option value="disable">Disable the filter</option>
+                                                <option value="remove">Remove the filter</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="filter-section">
+                            <div class="filter-section-header">Conditions</div>
+                            <div class="filter-conditions-type-row">
+                                <label>Match</label>
+                                <select id="filter-conditions-type">
+                                    <option value="and">All conditions (AND)</option>
+                                    <option value="or">Any condition (OR)</option>
+                                </select>
+                            </div>
+                            <div id="filter-conditions"></div>
+                            <button id="add-condition-btn" class="btn btn-default" style="margin-top:6px;">+ Add Condition</button>
+                        </div>
+
+                        <div class="filter-section">
+                            <div class="filter-section-header">Actions</div>
+                            <div id="filter-actions"></div>
+                            <button id="add-action-btn" class="btn btn-default" style="margin-top:6px;">+ Add Action</button>
+                        </div>
+
+                        <div class="filter-buttons">
+                            <button id="save-filter" class="btn btn-primary">Save Filter</button>
+                            <button id="cancel-filter" class="btn btn-default">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="new-label-content" class="tabcontent mail-tabcontent filters-page">
+                    <div class="filters-toolbar">
+                        <div class="filters-title">
+                            <button id="back-to-labels" class="btn-icon" title="Back to labels" aria-label="Back to labels">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                            </button>
+                            <h3 id="new-label-title">New Label</h3>
+                        </div>
+                    </div>
+                    <div class="filter-editor-form">
+                        <div class="filter-section">
+                            <div class="filter-section-header">Label Name</div>
+                            <input type="text" id="label-name" placeholder="Label name..." style="width:100%;">
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Color</div>
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <input type="color" id="label-color" value="#1a73e8" style="width:48px; height:36px; padding:2px; border:1px solid var(--border-color); border-radius:4px; cursor:pointer;">
+                                <span class="label-chip" id="label-preview" style="background-color:#1a73e8;">Preview</span>
+                            </div>
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Accounts (optional)</div>
+                            <div class="filter-add-row">
+                                <select id="label-account-input"></select>
+                                <button id="add-label-account-btn" class="btn btn-default">Add</button>
+                            </div>
+                            <div id="label-accounts-list" class="filter-tags"></div>
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Storage</div>
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="label-storage-imap">
+                                <span>Store as IMAP keyword (visible in other mail clients; subject to server character limits)</span>
+                            </label>
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Visibility</div>
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="label-hidden">
+                                <span>Hide chip in mail list and email view (internal flag — still applied by filters)</span>
+                            </label>
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Display order</div>
+                            <label style="display:flex; align-items:center; gap:8px;">
+                                <input type="number" id="label-weight" value="0" step="1" style="width:80px;">
+                                <span style="font-size:13px; color:var(--secondary-color);">Lower weight first; negatives allowed; ties broken by name.</span>
+                            </label>
+                        </div>
+                        <div class="filter-buttons">
+                            <button id="save-label" class="btn btn-primary">Save Label</button>
+                            <button id="cancel-label" class="btn btn-default">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="plugins-content" class="tabcontent mail-tabcontent filters-page">
+                    <div class="filters-toolbar">
+                        <div class="filters-title">
+                            <h3>Plugins</h3>
+                            <span id="plugins-count" class="filters-count"></span>
+                        </div>
+                        <div class="filters-toolbar-actions">
+                            <button id="refresh-plugins" class="btn-icon" title="Refresh" aria-label="Refresh">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                            </button>
+                            <button id="new-plugin-btn" class="btn btn-primary">Add Plugin</button>
+                        </div>
+                    </div>
+                    <div id="plugins-list" class="filter-list">Loading plugins...</div>
+                </div>
+
+                <div id="plugin-editor-content" class="tabcontent mail-tabcontent filters-page">
+                    <div class="filters-toolbar">
+                        <div class="filters-title">
+                            <button id="back-to-plugins" class="btn-icon" title="Back to plugins" aria-label="Back to plugins">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                            </button>
+                            <h3 id="plugin-editor-title">Plugin Editor</h3>
+                        </div>
+                    </div>
+                    <div class="filter-editor-form">
+                        <div id="plugin-editor-status" class="filter-section" style="display:none;">
+                            <div class="filter-section-header">Status</div>
+                            <div id="plugin-editor-status-body" style="font-size:13px;"></div>
+                        </div>
+                        <div id="plugin-editor-manifest" class="filter-section" style="display:none;">
+                            <div class="filter-section-header">Manifest (read-only)</div>
+                            <div id="plugin-editor-manifest-body" style="font-size:13px;"></div>
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Name</div>
+                            <input type="text" id="plugin-name-input" placeholder="Plugin name (must be unique)" style="width:100%;">
+                            <div style="font-size:12px; color:var(--secondary-color); margin-top:4px;">Renaming an existing plugin will create a new entry and detach filters that referenced the old name.</div>
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Command</div>
+                            <input type="text" id="plugin-command-input" placeholder='/path/to/plugin (space-separated args)' style="width:100%;">
+                            <div style="font-size:12px; color:var(--secondary-color); margin-top:4px;">Executable path + optional argv. Pasted as a single line; first token is the binary, rest are arguments.</div>
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Transport</div>
+                            <select id="plugin-transport-input" style="width:200px;">
+                                <option value="socket">socket (default)</option>
+                                <option value="stdio">stdio</option>
+                            </select>
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Timeout</div>
+                            <input type="text" id="plugin-timeout-input" placeholder="15s" style="width:200px;">
+                            <div style="font-size:12px; color:var(--secondary-color); margin-top:4px;">Go duration string ("10s", "1m"). Defaults to the plugin's own internal timeout when blank.</div>
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Disabled</div>
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="plugin-disabled-input">
+                                <span>Keep the spec but don't spawn the child process. Filters that reference this plugin will silently no-op.</span>
+                            </label>
+                        </div>
+                        <div class="filter-section">
+                            <div class="filter-section-header">Config (YAML)</div>
+                            <textarea id="plugin-config-input" rows="14" spellcheck="false" style="width:100%; font-family:'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size:13px; padding:8px; border:1px solid var(--border-color); border-radius:4px;"></textarea>
+                            <div id="plugin-config-mask-hint" style="font-size:12px; color:var(--secondary-color); margin-top:4px; display:none;">
+                                Masked values shown as <code>•••MASKED•••</code> are kept unchanged on save. Replace the marker with a new value to overwrite.
+                            </div>
+                        </div>
+                        <div id="plugin-editor-usage" class="filter-section" style="display:none;">
+                            <div class="filter-section-header">Used by filters</div>
+                            <div id="plugin-editor-usage-body" style="font-size:13px;"></div>
+                        </div>
+                        <div class="filter-buttons" style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button id="save-plugin" class="btn btn-primary">Save</button>
+                            <button id="save-restart-plugin" class="btn btn-primary" style="display:none;">Save &amp; Restart</button>
+                            <button id="restart-plugin" class="btn btn-default" style="display:none;">Restart</button>
+                            <button id="trigger-plugin" class="btn btn-default" style="display:none;" title="Fire scheduled_tick now (only available for cron/interval plugins)">Run Now</button>
+                            <button id="toggle-plugin-disabled" class="btn btn-default" style="display:none;">Disable</button>
+                            <button id="delete-plugin" class="btn btn-danger" style="display:none;">Delete</button>
+                            <button id="cancel-plugin" class="btn btn-default">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Move-to modal with overlay -->
+    <div id="move-to-overlay" class="modal-overlay" data-action="close-modal" data-overlay="move-to-overlay" data-modal="move-to-modal"></div>
+    <div id="move-to-modal" class="modal-card" style="display:none;">
+        <h3>Move to</h3>
+        <ul id="mailbox-list"></ul>
+        <div style="margin-top:16px; text-align:right;">
+            <button id="cancel-move-button" class="btn btn-default">Cancel</button>
+        </div>
+    </div>
+
+    <div id="label-picker-overlay" class="modal-overlay" data-action="close-modal" data-overlay="label-picker-overlay" data-modal="label-picker-modal"></div>
+    <div id="label-picker-modal" class="modal-card" style="display:none; max-width:350px; max-height:60vh;">
+        <h3>Add Label</h3>
+        <ul id="label-picker-list" style="overflow-y:auto; max-height:calc(60vh - 80px);"></ul>
+    </div>
+
+    <div id="headers-overlay" class="modal-overlay" data-action="close-modal" data-overlay="headers-overlay" data-modal="headers-modal"></div>
+    <div id="headers-modal" class="modal-card headers-modal" style="display:none;">
+        <div class="headers-modal-header">
+            <h3>Email Headers</h3>
+            <button class="btn-icon" data-action="close-modal" data-overlay="headers-overlay" data-modal="headers-modal" title="Close" aria-label="Close">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+        </div>
+        <div id="headers-list" class="headers-list"></div>
+    </div>
+
+    <div id="filter-picker-overlay" class="modal-overlay" data-action="close-modal" data-overlay="filter-picker-overlay" data-modal="filter-picker-modal"></div>
+    <div id="filter-picker-modal" class="modal-card" style="display:none; max-width:400px; max-height:60vh;">
+        <h3>Add condition to filter</h3>
+        <ul id="filter-picker-list" style="overflow-y:auto; max-height:calc(60vh - 80px);"></ul>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+    <script nonce="__CSP_NONCE__" src="/static/app/core.js?v=__ASSET_VERSION__"></script>
+    <script nonce="__CSP_NONCE__" src="/static/app/mail.js?v=__ASSET_VERSION__"></script>
+    <script nonce="__CSP_NONCE__" src="/static/app/compose.js?v=__ASSET_VERSION__"></script>
+    <script nonce="__CSP_NONCE__" src="/static/app/filters.js?v=__ASSET_VERSION__"></script>
+    <script nonce="__CSP_NONCE__" src="/static/app/labels.js?v=__ASSET_VERSION__"></script>
+    <script nonce="__CSP_NONCE__" src="/static/app/plugins.js?v=__ASSET_VERSION__"></script>
+    <script nonce="__CSP_NONCE__" src="/static/app/search.js?v=__ASSET_VERSION__"></script>
+    <script nonce="__CSP_NONCE__" src="/static/app/settings.js?v=__ASSET_VERSION__"></script>
+    <script nonce="__CSP_NONCE__" src="/static/app/init.js?v=__ASSET_VERSION__"></script>
+</body>
+</html>
