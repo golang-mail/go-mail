@@ -104,6 +104,15 @@ function escapeHtml(text) {
     return String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Every link that survives sanitising opens in a new tab without giving the
+// target page a window.opener handle or our URL as referrer.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A' && node.hasAttribute('href')) {
+        node.setAttribute('target', '_blank');
+        node.setAttribute('rel', 'noopener noreferrer');
+    }
+});
+
 function escapeAttr(text) {
     return escapeHtml(text).replace(/"/g, '&quot;');
 }

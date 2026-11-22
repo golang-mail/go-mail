@@ -633,7 +633,7 @@ async function renderMails(accountName, mailboxName, mailsData, page, preserveSe
 
     const status = await fetchMailboxStatus(accountName, mailboxName);
     totalMessages = status.Messages || 0;
-    document.querySelector('.mailbox-name').innerHTML = mbIconHtml + mailboxName;
+    document.querySelector('.mailbox-name').innerHTML = mbIconHtml + escapeHtml(mailboxName);
     document.querySelector('.mailbox-stats').innerText = `${status.Unseen}/${status.Messages}`;
     const deleteMailboxBtn = document.getElementById('delete-mailbox-button');
     if (status.Messages === 0) {
@@ -721,12 +721,12 @@ async function renderMails(accountName, mailboxName, mailsData, page, preserveSe
         selectAllInMailbox = false;
         const banner = document.getElementById('select-all-banner');
         if (e.target.checked && totalConversations > allCheckboxes.length) {
-            banner.innerHTML = `All ${allCheckboxes.length} conversations on this page are selected. <a href="#" id="select-all-mailbox-link">Select all ${totalMessages} emails in ${mailboxName}</a>`;
+            banner.innerHTML = `All ${allCheckboxes.length} conversations on this page are selected. <a href="#" id="select-all-mailbox-link">Select all ${totalMessages} emails in ${escapeHtml(mailboxName)}</a>`;
             banner.style.display = 'block';
             document.getElementById('select-all-mailbox-link').addEventListener('click', (evt) => {
                 evt.preventDefault();
                 selectAllInMailbox = true;
-                banner.innerHTML = `All ${totalMessages} emails in ${mailboxName} are selected. <a href="#" id="clear-all-mailbox-link">Clear selection</a>`;
+                banner.innerHTML = `All ${totalMessages} emails in ${escapeHtml(mailboxName)} are selected. <a href="#" id="clear-all-mailbox-link">Clear selection</a>`;
                 document.getElementById('clear-all-mailbox-link').addEventListener('click', (evt2) => {
                     evt2.preventDefault();
                     selectAllInMailbox = false;
@@ -1239,7 +1239,7 @@ async function renderMails(accountName, mailboxName, mailsData, page, preserveSe
         if (prevSelectAll) {
             const banner = document.getElementById('select-all-banner');
             if (banner) {
-                banner.innerHTML = `All ${totalMessages} emails in ${mailboxName} are selected. <a href="#" id="clear-all-mailbox-link">Clear selection</a>`;
+                banner.innerHTML = `All ${totalMessages} emails in ${escapeHtml(mailboxName)} are selected. <a href="#" id="clear-all-mailbox-link">Clear selection</a>`;
                 banner.style.display = 'block';
                 document.getElementById('clear-all-mailbox-link').addEventListener('click', (evt) => {
                     evt.preventDefault();
@@ -1285,7 +1285,7 @@ async function showMail(accountName, mailboxName, uid, e) {
 
     let labelChipsHTML = '<div id="email-labels" style="margin:4px 0 8px 0;">';
     orderedChipsFor(mailContent.labels, mailContent.flags).forEach(item => {
-        const safe = DOMPurify.sanitize(item.name);
+        const safe = escapeAttr(item.name);
         if (item.kind === 'orphan') {
             labelChipsHTML += `<span class="flag-chip flag-chip-removable" data-label="${safe}" title="IMAP flag">${safe}<span class="label-chip-x">&times;</span></span>`;
         } else {
@@ -1313,9 +1313,9 @@ async function showMail(accountName, mailboxName, uid, e) {
     if (mailContent.attachments && mailContent.attachments.length > 0) {
         headerHTML += '<div class="email-attachments">';
         mailContent.attachments.forEach(att => {
-            headerHTML += `<a class="email-attachment-chip" href="/api/attachment?account=${accountName}&mailbox=${mailboxName}&uid=${uid}&attachment=${att}" download>
+            headerHTML += `<a class="email-attachment-chip" href="/api/attachment?account=${encodeURIComponent(accountName)}&mailbox=${encodeURIComponent(mailboxName)}&uid=${encodeURIComponent(uid)}&attachment=${encodeURIComponent(att)}" download>
                 ${svgAttachmentIcon(16)}
-                ${DOMPurify.sanitize(att)}
+                ${escapeHtml(att)}
             </a>`;
         });
         headerHTML += '</div>';
@@ -1430,8 +1430,8 @@ async function showMail(accountName, mailboxName, uid, e) {
                 out += `<div style="margin-bottom:12px; white-space: pre-wrap; font-family: sans-serif;">${DOMPurify.sanitize(noteText)}</div>`;
             }
             out += '<div style="border:1px solid var(--border-color); padding:16px; background:var(--white); max-width:900px; border-radius:8px;">';
-            if (meetUrl) {
-                out += `<div style="margin-bottom:12px;"><a href="${DOMPurify.sanitize(meetUrl)}" target="_blank" style="display:inline-block;background:var(--primary-color);color:var(--contrast-text);padding:10px 20px;border-radius:20px;text-decoration:none;font-weight:500;">Join with Google Meet</a></div>`;
+            if (meetUrl && /^https:\/\//i.test(meetUrl.trim())) {
+                out += `<div style="margin-bottom:12px;"><a href="${escapeAttr(meetUrl.trim())}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:var(--primary-color);color:var(--contrast-text);padding:10px 20px;border-radius:20px;text-decoration:none;font-weight:500;">Join with Google Meet</a></div>`;
             }
             const icsName = (mailContent.attachments || []).find(a => a.toLowerCase().endsWith('.ics')) || '';
             if (icsName) {
