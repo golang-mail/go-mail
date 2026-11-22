@@ -184,6 +184,7 @@ func StartWebServer(store *cache.Store, runAllFiltersCh chan struct{}, runSelect
 	http.HandleFunc("/api/labels", apiRoute("/api/labels", labelsHandler()))
 	http.HandleFunc("/api/labels/", apiRoute("/api/labels/", labelItemHandler()))
 	http.HandleFunc("/api/mail/label", apiRoute("/api/mail/label", mailLabelHandler(store)))
+	http.HandleFunc("/api/image-hosts", apiRoute("/api/image-hosts", imageHostsHandler(store)))
 	http.HandleFunc("/api/contacts", apiRoute("/api/contacts", contactsHandler()))
 	http.HandleFunc("/api/spam/train", apiRoute("/api/spam/train", spamTrainHandler(store, classifier)))
 	http.HandleFunc("/api/spam/train-batch", apiRoute("/api/spam/train-batch", spamTrainBatchHandler(store, classifier)))

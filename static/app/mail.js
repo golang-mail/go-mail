@@ -61,20 +61,29 @@ async function fetchAccounts() {
     return accounts;
 }
 
-// Hosts the user chose to always load remote images from (per browser).
-const ALLOWED_IMAGE_HOSTS_KEY = 'allowedImageHosts';
-function getAllowedImageHosts() {
+// Hosts the user chose to always load remote images from, stored on the
+// server per account (/api/image-hosts) and cached here after the first read.
+const imageHostsCache = new Map();
+async function getAllowedImageHosts(account) {
+    if (imageHostsCache.has(account)) return imageHostsCache.get(account);
+    let hosts = [];
     try {
-        const v = JSON.parse(localStorage.getItem(ALLOWED_IMAGE_HOSTS_KEY) || '[]');
-        return new Set(Array.isArray(v) ? v : []);
-    } catch (e) {
-        return new Set();
-    }
+        const res = await fetch(`/api/image-hosts?account=${encodeURIComponent(account)}`, { credentials: 'include' });
+        if (res.ok) hosts = await res.json();
+    } catch (e) { /* offline: fail closed, everything stays blocked */ }
+    const set = new Set(Array.isArray(hosts) ? hosts : []);
+    imageHostsCache.set(account, set);
+    return set;
 }
-function allowImageHost(host) {
-    const set = getAllowedImageHosts();
-    set.add(host);
-    localStorage.setItem(ALLOWED_IMAGE_HOSTS_KEY, JSON.stringify([...set]));
+async function allowImageHost(account, host) {
+    const res = await fetch(`/api/image-hosts?account=${encodeURIComponent(account)}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host }),
+    });
+    if (!res.ok) throw new Error((await res.text()).trim() || ('server returned ' + res.status));
+    imageHostsCache.set(account, new Set(await res.json()));
 }
 
 // blockRemoteContent neutralises every sanitized-HTML reference that would make
@@ -1542,9 +1551,12 @@ async function showMail(accountName, mailboxName, uid, e) {
         // Remote images are blocked by default: loading them tells the sender
         // that (and when) the mail was opened and leaks the client IP.
         let bar = null;
-        const renderBody = () => {
+        const renderToken = mailBodyDiv.dataset.renderToken = String(Date.now() + Math.random());
+        const renderBody = async () => {
             if (bar) { bar.remove(); bar = null; }
-            const blocked = blockRemoteContent(sanitized, getAllowedImageHosts());
+            const allowedHosts = await getAllowedImageHosts(accountName);
+            if (mailBodyDiv.dataset.renderToken !== renderToken) return; // another mail was opened meanwhile
+            const blocked = blockRemoteContent(sanitized, allowedHosts);
             mailBodyDiv.innerHTML = blocked.html;
             if (blocked.count === 0) return;
             bar = document.createElement('div');
@@ -1568,16 +1580,20 @@ async function showMail(accountName, mailboxName, uid, e) {
                 chip.className = 'remote-images-domain';
                 chip.title = 'Always load images from ' + host;
                 chip.textContent = 'Always allow ' + host;
-                chip.addEventListener('click', () => {
-                    allowImageHost(host);
-                    renderBody();
+                chip.addEventListener('click', async () => {
+                    try {
+                        await allowImageHost(accountName, host);
+                        await renderBody();
+                    } catch (err) {
+                        showToast('Could not save: ' + err.message, 'error');
+                    }
                 });
                 domains.appendChild(chip);
             });
             bar.append(msg, showBtn, domains);
             mailHeaderDiv.appendChild(bar);
         };
-        renderBody();
+        await renderBody();
     }
     document.getElementById('mail-content').dataset.uid = uid;
     document.getElementById('mail-content').dataset.account = accountName;
