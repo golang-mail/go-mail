@@ -75,6 +75,14 @@ async function getAllowedImageHosts(account) {
     imageHostsCache.set(account, set);
     return set;
 }
+async function removeImageHost(account, host) {
+    const res = await fetch(`/api/image-hosts?account=${encodeURIComponent(account)}&host=${encodeURIComponent(host)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    });
+    if (!res.ok) throw new Error((await res.text()).trim() || ('server returned ' + res.status));
+    imageHostsCache.set(account, new Set(await res.json()));
+}
 async function allowImageHost(account, host) {
     const res = await fetch(`/api/image-hosts?account=${encodeURIComponent(account)}`, {
         method: 'POST',

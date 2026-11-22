@@ -117,3 +117,78 @@ if (label) label.textContent = newMailSoundEnabled ? 'Sound: On' : 'Sound: Off';
 function closeSettingsMenu() {
     document.getElementById('settings-menu').classList.remove('open');
 }
+
+// Settings dialog: per-account list of domains remote images are always loaded from.
+async function openImageHosts() {
+    const accounts = (typeof accountsData !== 'undefined' && accountsData) || await fetchAccounts();
+    if (!accounts.length) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    const dialog = document.createElement('div');
+    dialog.className = 'confirm-dialog image-hosts-dialog';
+    const title = document.createElement('div');
+    title.className = 'confirm-message';
+    title.textContent = 'Remote images are always loaded from these domains:';
+    const select = document.createElement('select');
+    select.className = 'image-hosts-account';
+    accounts.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.Name;
+        opt.textContent = a.Name;
+        select.appendChild(opt);
+    });
+    const list = document.createElement('ul');
+    list.className = 'image-hosts-list';
+    const actions = document.createElement('div');
+    actions.className = 'confirm-actions';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'confirm-btn confirm-ok';
+    closeBtn.textContent = 'Close';
+    actions.appendChild(closeBtn);
+    dialog.append(title, select, list, actions);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+
+    const close = () => {
+        overlay.classList.remove('visible');
+        setTimeout(() => overlay.remove(), 200);
+    };
+    closeBtn.onclick = close;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    const render = async () => {
+        const account = select.value;
+        const hosts = [...await getAllowedImageHosts(account)].sort();
+        list.textContent = '';
+        if (hosts.length === 0) {
+            const empty = document.createElement('li');
+            empty.className = 'image-hosts-empty';
+            empty.textContent = 'None. Remote images are blocked until you allow a domain from an email.';
+            list.appendChild(empty);
+            return;
+        }
+        hosts.forEach(host => {
+            const li = document.createElement('li');
+            const name = document.createElement('span');
+            name.textContent = host;
+            const rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'btn-icon';
+            rm.title = 'Stop allowing ' + host;
+            rm.textContent = '\u00d7';
+            rm.addEventListener('click', async () => {
+                try {
+                    await removeImageHost(account, host);
+                    render();
+                } catch (err) {
+                    showToast('Could not remove: ' + err.message, 'error');
+                }
+            });
+            li.append(name, rm);
+            list.appendChild(li);
+        });
+    };
+    select.addEventListener('change', render);
+    render();
+}

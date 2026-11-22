@@ -38,6 +38,7 @@ document.addEventListener('click', function(e) {
         case 'open-filters': openFilters(evt); break;
         case 'open-labels': openLabels(evt); break;
         case 'open-plugins': openPlugins(evt); break;
+        case 'open-image-hosts': openImageHosts(); break;
         case 'show-mails': showMails(evt); break;
         case 'open-tab': openTab(evt, d.tab, d.contentClass, d.linksClass); break;
         case 'discard-compose': discardCompose(evt); break;
