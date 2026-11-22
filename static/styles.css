@@ -2997,3 +2997,12 @@ input:checked + .slider:before {
 .image-hosts-list li { display: flex; align-items: center; justify-content: space-between; padding: 6px 4px; border-bottom: 1px solid var(--border-color); font-size: 14px; }
 .image-hosts-list .image-hosts-empty { color: var(--secondary-color); font-size: 13px; }
 .image-hosts-list .btn-icon { font-size: 18px; line-height: 1; }
+
+/* Sandboxed iframe holding the email body; height is set from its content. */
+.mail-frame {
+    display: block;
+    width: 100%;
+    border: 0;
+    min-height: 40px;
+    background: transparent;
+}

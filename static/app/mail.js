@@ -61,6 +61,38 @@ async function fetchAccounts() {
     return accounts;
 }
 
+// renderEmailFrame shows untrusted email HTML inside a sandboxed iframe.
+// The sandbox has no allow-scripts, so no script, event handler or javascript:
+// URL can run, and `position:fixed` or overlays cannot escape the frame.
+// allow-same-origin is only there so we can measure the content height; it is
+// harmless without allow-scripts. A CSP inside the frame additionally limits
+// images to `imgSrc` (the allowed hosts), forbidding every other fetch.
+function renderEmailFrame(container, html, imgSrc) {
+    container.textContent = '';
+    const frame = document.createElement('iframe');
+    frame.className = 'mail-frame';
+    frame.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+    frame.setAttribute('referrerpolicy', 'no-referrer');
+    frame.setAttribute('title', 'Email content');
+    const cs = getComputedStyle(container);
+    const csp = `default-src 'none'; img-src ${imgSrc}; style-src 'unsafe-inline'; font-src data:`;
+    frame.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        + `<meta http-equiv="Content-Security-Policy" content="${csp}">`
+        + '<base target="_blank">'
+        + `<style>html,body{margin:0;padding:0}html{overflow-y:hidden}body{display:flow-root;font:${cs.fontSize}/${cs.lineHeight} ${cs.fontFamily};`
+        + `color:${cs.color};background:${cs.backgroundColor};overflow-wrap:anywhere}`
+        + 'img{max-width:100%;height:auto}</style></head><body>' + html + '</body></html>';
+    frame.addEventListener('load', () => {
+        const doc = frame.contentDocument;
+        if (!doc || !doc.body) return;
+        const fit = () => { frame.style.height = Math.ceil(doc.body.getBoundingClientRect().height) + 'px'; };
+        fit();
+        new ResizeObserver(fit).observe(doc.body);
+        doc.querySelectorAll('img').forEach(img => img.addEventListener('load', fit));
+    });
+    container.appendChild(frame);
+}
+
 // Hosts the user chose to always load remote images from, stored on the
 // server per account (/api/image-hosts) and cached here after the first read.
 const imageHostsCache = new Map();
@@ -1452,7 +1484,7 @@ async function showMail(accountName, mailboxName, uid, e) {
             const formatICalDate = (raw, tzid) => {
                 if (!raw) return '';
                 const m = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/);
-                if (!m) return DOMPurify.sanitize(raw);
+                if (!m) return raw;
                 const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}${m[7] ? 'Z' : ''}`;
                 if (m[7]) {
                     const d = new Date(iso);
@@ -1468,7 +1500,7 @@ async function showMail(accountName, mailboxName, uid, e) {
 
             let out = '';
             if (noteText) {
-                out += `<div style="margin-bottom:12px; white-space: pre-wrap; font-family: sans-serif;">${DOMPurify.sanitize(noteText)}</div>`;
+                out += `<div style="margin-bottom:12px; white-space: pre-wrap; font-family: sans-serif;">${escapeHtml(noteText)}</div>`;
             }
             out += '<div style="border:1px solid var(--border-color); padding:16px; background:var(--white); max-width:900px; border-radius:8px;">';
             if (meetUrl && /^https:\/\//i.test(meetUrl.trim())) {
@@ -1478,7 +1510,7 @@ async function showMail(accountName, mailboxName, uid, e) {
             if (icsName) {
                 const icsUrl = `/api/attachment?account=${encodeURIComponent(accountName)}&mailbox=${encodeURIComponent(mailboxName)}&uid=${encodeURIComponent(uid)}&attachment=${encodeURIComponent(icsName)}`;
                 out += `<div style="margin-bottom:8px;"><a href="${icsUrl}" download style="margin-right:8px;">Add to calendar</a>`;
-                out += ` <span style="color:var(--secondary-color); font-size:0.9em;">(${DOMPurify.sanitize(icsName)})</span></div>`;
+                out += ` <span style="color:var(--secondary-color); font-size:0.9em;">(${escapeHtml(icsName)})</span></div>`;
             }
             out += `<div style="margin-bottom:12px; display:flex; gap:8px;">
                         <button id="rsvp-accept-${uid}" class="btn btn-success" style="padding:6px 20px;">Accept</button>
@@ -1486,15 +1518,15 @@ async function showMail(accountName, mailboxName, uid, e) {
                         <button id="rsvp-decline-${uid}" class="btn btn-danger" style="padding:6px 20px;">Decline</button>
                     </div>`;
             out += '<table style="width:100%;"><tbody>';
-            if (summary) out += `<tr><td style="font-weight:500;padding:6px 12px 6px 0;width:100px;color:var(--secondary-color);vertical-align:top;">Title</td><td style="padding:6px 0;">${DOMPurify.sanitize(summary)}</td></tr>`;
-            if (location) out += `<tr><td style="font-weight:500;padding:6px 12px 6px 0;color:var(--secondary-color);vertical-align:top;">Location</td><td style="padding:6px 0;">${DOMPurify.sanitize(location || '')}</td></tr>`;
-            if (whenText) out += `<tr><td style="font-weight:500;padding:6px 12px 6px 0;color:var(--secondary-color);vertical-align:top;">When</td><td style="padding:6px 0;">${DOMPurify.sanitize(whenText)}</td></tr>`;
-            if (organizer) out += `<tr><td style="font-weight:500;padding:6px 12px 6px 0;color:var(--secondary-color);vertical-align:top;">Organizer</td><td style="padding:6px 0;">${DOMPurify.sanitize(organizer)}</td></tr>`;
+            if (summary) out += `<tr><td style="font-weight:500;padding:6px 12px 6px 0;width:100px;color:var(--secondary-color);vertical-align:top;">Title</td><td style="padding:6px 0;">${escapeHtml(summary)}</td></tr>`;
+            if (location) out += `<tr><td style="font-weight:500;padding:6px 12px 6px 0;color:var(--secondary-color);vertical-align:top;">Location</td><td style="padding:6px 0;">${escapeHtml(location || '')}</td></tr>`;
+            if (whenText) out += `<tr><td style="font-weight:500;padding:6px 12px 6px 0;color:var(--secondary-color);vertical-align:top;">When</td><td style="padding:6px 0;">${escapeHtml(whenText)}</td></tr>`;
+            if (organizer) out += `<tr><td style="font-weight:500;padding:6px 12px 6px 0;color:var(--secondary-color);vertical-align:top;">Organizer</td><td style="padding:6px 0;">${escapeHtml(organizer)}</td></tr>`;
             if (descriptionHtml) out += `<tr><td style="vertical-align:top;font-weight:500;padding:6px 12px 6px 0;color:var(--secondary-color);">Description</td><td style="padding:6px 0;">${descriptionHtml}</td></tr>`;
             if (attendees && attendees.length > 0) {
                 let attHtml = '<div style="display:flex;flex-direction:column;gap:4px;">';
                 attendees.forEach(a => {
-                    attHtml += `<div>${DOMPurify.sanitize(a.name)} &lt;${DOMPurify.sanitize(a.email)}&gt;</div>`;
+                    attHtml += `<div>${escapeHtml(a.name)} &lt;${escapeHtml(a.email)}&gt;</div>`;
                 });
                 attHtml += '</div>';
                 out += `<tr><td style="vertical-align:top;font-weight:500;padding:6px 12px 6px 0;color:var(--secondary-color);">Attendees</td><td style="padding:6px 0;">${attHtml}</td></tr>`;
@@ -1503,7 +1535,7 @@ async function showMail(accountName, mailboxName, uid, e) {
             out += '</div>';
 
             if (out === '<div style="border:1px solid var(--border-color); padding:16px; background:var(--white); max-width:900px; border-radius:8px;"></div>') {
-                const safe = DOMPurify.sanitize(mailContent.body || '');
+                const safe = escapeHtml(mailContent.body || '');
                 mailBodyDiv.innerHTML = `<pre style="white-space: pre-wrap;">${safe.replace(/(\r\n|\n|\r)/gm, '\n')}</pre>`;
             } else {
                 mailBodyDiv.innerHTML = out;
@@ -1543,7 +1575,7 @@ async function showMail(accountName, mailboxName, uid, e) {
             if (tentBtn) tentBtn.addEventListener('click', () => respond('TENTATIVE'));
             if (declineBtn) declineBtn.addEventListener('click', () => respond('DECLINED'));
         } catch (err) {
-            const safe = DOMPurify.sanitize(mailContent.body || '');
+            const safe = escapeHtml(mailContent.body || '');
             mailBodyDiv.innerHTML = `<pre style="white-space: pre-wrap;">${safe.replace(/(\r\n|\n|\r)/gm, '\n')}</pre>`;
         }
     } else if (mailContent.contentType === 'text/plain') {
@@ -1565,7 +1597,7 @@ async function showMail(accountName, mailboxName, uid, e) {
             const allowedHosts = await getAllowedImageHosts(accountName);
             if (mailBodyDiv.dataset.renderToken !== renderToken) return; // another mail was opened meanwhile
             const blocked = blockRemoteContent(sanitized, allowedHosts);
-            mailBodyDiv.innerHTML = blocked.html;
+            renderEmailFrame(mailBodyDiv, blocked.html, 'data: ' + [...allowedHosts].map(h => 'https://' + h).join(' '));
             if (blocked.count === 0) return;
             bar = document.createElement('div');
             bar.className = 'remote-images-bar';
@@ -1576,7 +1608,7 @@ async function showMail(accountName, mailboxName, uid, e) {
             showBtn.type = 'button';
             showBtn.textContent = 'Show images';
             showBtn.addEventListener('click', () => {
-                mailBodyDiv.innerHTML = sanitized;
+                renderEmailFrame(mailBodyDiv, sanitized, 'data: https:');
                 bar.remove();
                 bar = null;
             });
