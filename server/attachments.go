@@ -129,6 +129,9 @@ func attachmentHandler(store *cache.Store) http.HandlerFunc {
 		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": attachmentName}))
 		w.Header().Set("Content-Type", part.Header.Get("Content-Type"))
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// Belt and braces: if a browser ever renders the attachment instead of
+		// saving it, it runs in an opaque origin with no scripts or fetches.
+		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
 		if _, err := io.Copy(w, part.Body); err != nil {
 			slog.Error("failed to stream attachment", "error", err)
 		}
