@@ -273,7 +273,7 @@ function populatePluginEditor(detail, mode) {
     if (mode === 'edit' && detail && detail.usage && detail.usage.filter_count > 0) {
         usageBlock.style.display = '';
         const filters = (detail.usage.filters || []).map(f => escapeHTMLPlugins(f)).join(', ');
-        usageBody.innerHTML = detail.usage.filter_count + ' filter' + (detail.usage.filter_count !== 1 ? 's' : '') + ': ' + filters;
+        usageBody.innerHTML = Number(detail.usage.filter_count) + ' filter' + (detail.usage.filter_count !== 1 ? 's' : '') + ': ' + filters;
     } else {
         usageBlock.style.display = 'none';
     }

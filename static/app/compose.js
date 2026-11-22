@@ -32,7 +32,7 @@ function insertSignature() {
     if (existingSig) existingSig.remove();
 
     if (composeMode === 'html') {
-        const sigContent = sig.html || sig.txt.replace(/\n/g, '<br>');
+        const sigContent = sig.html ? DOMPurify.sanitize(sig.html) : escapeHtml(sig.txt).replace(/\n/g, '<br>');
         if (sigContent) {
             htmlEditor.innerHTML += '<div class="email-signature"><br>' + sigContent + '</div>';
         }
