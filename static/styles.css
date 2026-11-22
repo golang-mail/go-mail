@@ -2971,3 +2971,22 @@ input:checked + .slider:before {
     background: var(--primary-color);
     color: var(--white);
 }
+
+.remote-images-bar { flex-wrap: wrap; }
+.remote-images-domains {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex-basis: 100%;
+}
+.remote-images-bar .remote-images-domain {
+    border-color: var(--border-color);
+    color: var(--secondary-color);
+    font-size: 12px;
+    padding: 2px 10px;
+}
+.remote-images-bar .remote-images-domain:hover {
+    border-color: var(--primary-color);
+    background: transparent;
+    color: var(--primary-color);
+}

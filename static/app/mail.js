@@ -61,45 +61,69 @@ async function fetchAccounts() {
     return accounts;
 }
 
+// Hosts the user chose to always load remote images from (per browser).
+const ALLOWED_IMAGE_HOSTS_KEY = 'allowedImageHosts';
+function getAllowedImageHosts() {
+    try {
+        const v = JSON.parse(localStorage.getItem(ALLOWED_IMAGE_HOSTS_KEY) || '[]');
+        return new Set(Array.isArray(v) ? v : []);
+    } catch (e) {
+        return new Set();
+    }
+}
+function allowImageHost(host) {
+    const set = getAllowedImageHosts();
+    set.add(host);
+    localStorage.setItem(ALLOWED_IMAGE_HOSTS_KEY, JSON.stringify([...set]));
+}
+
 // blockRemoteContent neutralises every sanitized-HTML reference that would make
-// the browser contact a third party (images, srcset, backgrounds, CSS url()).
-// Returns the rewritten HTML and how many references were blocked.
-function blockRemoteContent(html) {
-    const isRemote = (v) => /^\s*(https?:)?\/\//i.test(v || '');
-    const cssHasRemote = (v) => /url\(\s*['"]?\s*(https?:)?\/\//i.test(v || '');
-    const stripCssUrls = (v) => v.replace(/url\(\s*['"]?\s*(?:https?:)?\/\/[^)]*\)/gi, 'none');
+// the browser contact a third party (images, srcset, backgrounds, CSS url()),
+// except hosts in `allowed`. Returns the rewritten HTML, how many references
+// were blocked and the distinct hosts they pointed at.
+function blockRemoteContent(html, allowed) {
+    allowed = allowed || new Set();
+    const hosts = new Set();
+    let count = 0;
+    const remoteHost = (v) => {
+        const m = /^\s*(?:https?:)?\/\/([^\/?#\s'")]+)/i.exec(v || '');
+        if (!m) return null;
+        return m[1].replace(/^.*@/, '').replace(/:\d+$/, '').toLowerCase();
+    };
+    // True (and records the host) when the reference must be blocked.
+    const blocks = (v) => {
+        const h = remoteHost(v);
+        if (!h || allowed.has(h)) return false;
+        hosts.add(h);
+        count++;
+        return true;
+    };
+    const cssRe = /url\(\s*['"]?\s*((?:https?:)?\/\/[^)'"\s]*)['"]?\s*\)/gi;
+    const stripCss = (v) => v.replace(cssRe, (all, u) => (blocks(u) ? 'none' : all));
+
     const tpl = document.createElement('template');
     tpl.innerHTML = html;
-    let count = 0;
     tpl.content.querySelectorAll('*').forEach(el => {
+        const tag = el.tagName.toLowerCase();
         for (const attr of ['src', 'poster', 'background', 'href', 'xlink:href']) {
             if (!el.hasAttribute(attr)) continue;
-            const tag = el.tagName.toLowerCase();
             // Plain links stay clickable; only auto-loaded resources are blocked.
-            if (attr === 'href' || attr === 'xlink:href') {
-                if (tag !== 'image' && tag !== 'use' && tag !== 'feimage') continue;
-            }
-            if (isRemote(el.getAttribute(attr))) {
-                el.removeAttribute(attr);
-                count++;
-            }
+            if ((attr === 'href' || attr === 'xlink:href') && tag !== 'image' && tag !== 'use' && tag !== 'feimage') continue;
+            if (blocks(el.getAttribute(attr))) el.removeAttribute(attr);
         }
         if (el.hasAttribute('srcset')) {
-            el.removeAttribute('srcset');
-            count++;
+            const urls = el.getAttribute('srcset').split(',').map(c => c.trim().split(/\s+/)[0]);
+            const remote = urls.filter(u => remoteHost(u));
+            if (remote.some(u => blocks(u))) el.removeAttribute('srcset');
         }
-        if (el.hasAttribute('style') && cssHasRemote(el.getAttribute('style'))) {
-            el.setAttribute('style', stripCssUrls(el.getAttribute('style')));
-            count++;
-        }
-        if (el.tagName === 'STYLE' && /(@import|url\()/i.test(el.textContent)) {
-            el.textContent = stripCssUrls(el.textContent).replace(/@import[^;]*;?/gi, '');
-            count++;
+        if (el.hasAttribute('style')) el.setAttribute('style', stripCss(el.getAttribute('style')));
+        if (tag === 'style' && /(@import|url\()/i.test(el.textContent)) {
+            el.textContent = stripCss(el.textContent.replace(/@import\s+(?:url\(\s*)?['"]?((?:https?:)?\/\/[^'")\s;]*)['"]?\s*\)?[^;]*;?/gi, (all, u) => (blocks(u) ? '' : all)));
         }
     });
     const div = document.createElement('div');
     div.appendChild(tpl.content);
-    return { html: div.innerHTML, count };
+    return { html: div.innerHTML, count, hosts: [...hosts].sort() };
 }
 
 async function fetchMailboxes(accountName) {
@@ -1517,23 +1541,43 @@ async function showMail(accountName, mailboxName, uid, e) {
         });
         // Remote images are blocked by default: loading them tells the sender
         // that (and when) the mail was opened and leaks the client IP.
-        const blocked = blockRemoteContent(sanitized);
-        mailBodyDiv.innerHTML = blocked.html;
-        if (blocked.count > 0) {
-            const bar = document.createElement('div');
+        let bar = null;
+        const renderBody = () => {
+            if (bar) { bar.remove(); bar = null; }
+            const blocked = blockRemoteContent(sanitized, getAllowedImageHosts());
+            mailBodyDiv.innerHTML = blocked.html;
+            if (blocked.count === 0) return;
+            bar = document.createElement('div');
             bar.className = 'remote-images-bar';
             const msg = document.createElement('span');
+            msg.className = 'remote-images-msg';
             msg.textContent = 'Remote images are blocked to protect your privacy.';
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.textContent = 'Show images';
-            btn.addEventListener('click', () => {
+            const showBtn = document.createElement('button');
+            showBtn.type = 'button';
+            showBtn.textContent = 'Show images';
+            showBtn.addEventListener('click', () => {
                 mailBodyDiv.innerHTML = sanitized;
                 bar.remove();
+                bar = null;
             });
-            bar.append(msg, btn);
+            const domains = document.createElement('div');
+            domains.className = 'remote-images-domains';
+            blocked.hosts.forEach(host => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'remote-images-domain';
+                chip.title = 'Always load images from ' + host;
+                chip.textContent = 'Always allow ' + host;
+                chip.addEventListener('click', () => {
+                    allowImageHost(host);
+                    renderBody();
+                });
+                domains.appendChild(chip);
+            });
+            bar.append(msg, showBtn, domains);
             mailHeaderDiv.appendChild(bar);
-        }
+        };
+        renderBody();
     }
     document.getElementById('mail-content').dataset.uid = uid;
     document.getElementById('mail-content').dataset.account = accountName;
