@@ -61,6 +61,47 @@ async function fetchAccounts() {
     return accounts;
 }
 
+// blockRemoteContent neutralises every sanitized-HTML reference that would make
+// the browser contact a third party (images, srcset, backgrounds, CSS url()).
+// Returns the rewritten HTML and how many references were blocked.
+function blockRemoteContent(html) {
+    const isRemote = (v) => /^\s*(https?:)?\/\//i.test(v || '');
+    const cssHasRemote = (v) => /url\(\s*['"]?\s*(https?:)?\/\//i.test(v || '');
+    const stripCssUrls = (v) => v.replace(/url\(\s*['"]?\s*(?:https?:)?\/\/[^)]*\)/gi, 'none');
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    let count = 0;
+    tpl.content.querySelectorAll('*').forEach(el => {
+        for (const attr of ['src', 'poster', 'background', 'href', 'xlink:href']) {
+            if (!el.hasAttribute(attr)) continue;
+            const tag = el.tagName.toLowerCase();
+            // Plain links stay clickable; only auto-loaded resources are blocked.
+            if (attr === 'href' || attr === 'xlink:href') {
+                if (tag !== 'image' && tag !== 'use' && tag !== 'feimage') continue;
+            }
+            if (isRemote(el.getAttribute(attr))) {
+                el.removeAttribute(attr);
+                count++;
+            }
+        }
+        if (el.hasAttribute('srcset')) {
+            el.removeAttribute('srcset');
+            count++;
+        }
+        if (el.hasAttribute('style') && cssHasRemote(el.getAttribute('style'))) {
+            el.setAttribute('style', stripCssUrls(el.getAttribute('style')));
+            count++;
+        }
+        if (el.tagName === 'STYLE' && /(@import|url\()/i.test(el.textContent)) {
+            el.textContent = stripCssUrls(el.textContent).replace(/@import[^;]*;?/gi, '');
+            count++;
+        }
+    });
+    const div = document.createElement('div');
+    div.appendChild(tpl.content);
+    return { html: div.innerHTML, count };
+}
+
 async function fetchMailboxes(accountName) {
     const response = await fetch(`/api/mailboxes?account=${encodeURIComponent(accountName)}`, { credentials: 'include' });
     checkResponse(response);
@@ -1470,10 +1511,29 @@ async function showMail(accountName, mailboxName, uid, e) {
         mailBodyDiv.innerHTML = escapeHtml(mailContent.body).replace(/(\r\n|\n|\r)/gm, "<br>");
     } else {
         // Default: render as HTML (sanitized)
-        mailBodyDiv.innerHTML = DOMPurify.sanitize(mailContent.body, {
+        const sanitized = DOMPurify.sanitize(mailContent.body, {
             ALLOW_DATA_ATTR: false,
             ADD_ATTR: ['style', 'bgcolor', 'color', 'background', 'align', 'valign', 'width', 'height', 'cellpadding', 'cellspacing', 'border'],
         });
+        // Remote images are blocked by default: loading them tells the sender
+        // that (and when) the mail was opened and leaks the client IP.
+        const blocked = blockRemoteContent(sanitized);
+        mailBodyDiv.innerHTML = blocked.html;
+        if (blocked.count > 0) {
+            const bar = document.createElement('div');
+            bar.className = 'remote-images-bar';
+            const msg = document.createElement('span');
+            msg.textContent = 'Remote images are blocked to protect your privacy.';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = 'Show images';
+            btn.addEventListener('click', () => {
+                mailBodyDiv.innerHTML = sanitized;
+                bar.remove();
+            });
+            bar.append(msg, btn);
+            mailHeaderDiv.appendChild(bar);
+        }
     }
     document.getElementById('mail-content').dataset.uid = uid;
     document.getElementById('mail-content').dataset.account = accountName;

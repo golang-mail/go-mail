@@ -2942,3 +2942,32 @@ input:checked + .slider:before {
     /* Pagination — keep prev/next, drop the page-size selector to save room */
     .pagination-size-select { display: none; }
 }
+
+/* Banner shown when remote images were blocked in an email */
+.remote-images-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 16px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--hover-bg);
+    color: var(--secondary-color);
+    font-size: 13px;
+}
+
+.remote-images-bar button {
+    padding: 4px 12px;
+    border: 1px solid var(--primary-color);
+    border-radius: 14px;
+    background: transparent;
+    color: var(--primary-color);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.remote-images-bar button:hover {
+    background: var(--primary-color);
+    color: var(--white);
+}
