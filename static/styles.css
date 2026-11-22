@@ -716,12 +716,61 @@ body {
 }
 
 .mail-select-checkbox {
+    -webkit-appearance: none;
+    appearance: none;
     flex-shrink: 0;
-    width: 16px;
-    height: 16px;
-    margin: 0 6px 0 0;
+    position: relative;
+    width: 18px;
+    height: 18px;
+    margin: 0 8px 0 0;
     cursor: pointer;
-    accent-color: var(--accent-color);
+    border: 2px solid var(--secondary-color);
+    border-radius: 4px;
+    background: transparent;
+    transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+.mail-select-checkbox:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary-color) 14%, transparent);
+}
+
+.mail-select-checkbox:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.mail-select-checkbox:checked,
+.mail-select-checkbox:indeterminate {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.mail-select-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 0;
+    width: 4px;
+    height: 9px;
+    border: solid var(--white);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.mail-select-checkbox:indeterminate::after {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 6px;
+    width: 10px;
+    height: 2px;
+    background: var(--white);
+}
+
+/* Left accent bar on checked rows makes multi-select state easy to scan */
+.mail-row.checked {
+    box-shadow: inset 3px 0 0 var(--primary-color);
 }
 
 .mail-row.unread .mail-sender,

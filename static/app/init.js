@@ -326,6 +326,13 @@ main().then(() => {
 
             evt.preventDefault();
 
+            // Multi-select mode: clicking a row toggles its checkbox instead of opening it
+            if (selectedUIDs.size > 0 || selectAllInMailbox) {
+                const cb = row.querySelector('.mail-select-checkbox');
+                if (cb) cb.click();
+                return;
+            }
+
             // Handle selection
             const currentlySelected = mailsContainer.querySelector('.mail-row.selected');
             if (currentlySelected) {
