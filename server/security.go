@@ -88,8 +88,8 @@ func newNonce() string {
 // page handlers stamp onto every <script> tag. Inline styles stay allowed.
 const cspTemplate = "default-src 'self'; " +
 	"script-src 'self' 'nonce-%s'; " +
-	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-	"font-src 'self' https://fonts.gstatic.com; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"font-src 'self'; " +
 	"img-src 'self' data: https:; " +
 	"connect-src 'self'; " +
 	"object-src 'none'; " +

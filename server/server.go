@@ -12,8 +12,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,8 +39,8 @@ func assetsHandler(prefix, dir string) http.Handler {
 }
 
 // staticHandler serves the embedded app assets to logged-in users only.
-// login.html styles itself with remote fonts, so the login page needs
-// nothing from here.
+// The self-hosted fonts under /static/fonts/ are public because the login
+// page loads them before there is a session; nothing else here is.
 func staticHandler(staticFS fs.FS) http.HandlerFunc {
 	sub, err := fs.Sub(staticFS, "static")
 	if err != nil {
@@ -47,7 +49,7 @@ func staticHandler(staticFS fs.FS) http.HandlerFunc {
 	}
 	files := http.StripPrefix("/static/", http.FileServer(http.FS(sub)))
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !isLoggedIn(r) {
+		if !isLoggedIn(r) && !strings.HasPrefix(path.Clean(r.URL.Path), "/static/fonts/") {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}

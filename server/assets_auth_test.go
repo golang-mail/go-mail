@@ -37,12 +37,13 @@ func TestAssetsHandler_RequiresLogin(t *testing.T) {
 }
 
 // The embedded app assets (including the raw index.html template) must not be
-// reachable without a session; the login page styles itself with remote fonts.
+// reachable without a session; only the self-hosted fonts are public.
 func TestStaticHandler_RequiresLogin(t *testing.T) {
 	fakeFS := fstest.MapFS{
-		"static/index.html":  &fstest.MapFile{Data: []byte("<html>__CSP_NONCE__</html>")},
-		"static/styles.css":  &fstest.MapFile{Data: []byte("body{}")},
-		"static/app/init.js": &fstest.MapFile{Data: []byte("console.log(1)")},
+		"static/index.html":      &fstest.MapFile{Data: []byte("<html>__CSP_NONCE__</html>")},
+		"static/styles.css":      &fstest.MapFile{Data: []byte("body{}")},
+		"static/app/init.js":     &fstest.MapFile{Data: []byte("console.log(1)")},
+		"static/fonts/fonts.css": &fstest.MapFile{Data: []byte("@font-face{}")},
 	}
 	h := staticHandler(fakeFS)
 
@@ -54,13 +55,25 @@ func TestStaticHandler_RequiresLogin(t *testing.T) {
 		}
 	}
 
+	// Fonts are public (the login page uses them); path tricks must not widen that.
+	w := httptest.NewRecorder()
+	h(w, httptest.NewRequest(http.MethodGet, "/static/fonts/fonts.css", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("anonymous font css: want 200, got %d", w.Code)
+	}
+	w = httptest.NewRecorder()
+	h(w, httptest.NewRequest(http.MethodGet, "/static/fonts/../index.html", nil))
+	if w.Code != http.StatusFound {
+		t.Fatalf("anonymous traversal out of fonts: want redirect, got %d", w.Code)
+	}
+
 	mu.Lock()
 	sessions["static-tok"] = time.Now().Add(time.Hour)
 	mu.Unlock()
 	t.Cleanup(func() { mu.Lock(); delete(sessions, "static-tok"); mu.Unlock() })
 	req := httptest.NewRequest(http.MethodGet, "/static/styles.css", nil)
 	req.AddCookie(&http.Cookie{Name: "mail_session_id", Value: "static-tok"})
-	w := httptest.NewRecorder()
+	w = httptest.NewRecorder()
 	h(w, req)
 	if w.Code != http.StatusOK || w.Body.String() != "body{}" {
 		t.Fatalf("logged-in asset fetch: %d %q", w.Code, w.Body)
